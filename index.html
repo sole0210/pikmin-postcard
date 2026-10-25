@@ -253,7 +253,7 @@ const locationCache=new Map();
 const countryNames=new Intl.DisplayNames(['ko'],{type:'region'});
 function inRing(lon,lat,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const a=ring[i],b=ring[j];if((a[1]>lat)!==(b[1]>lat)&&lon<(b[0]-a[0])*(lat-a[1])/(b[1]-a[1])+a[0])inside=!inside}return inside}
 function inPolygon(lon,lat,polygon){return inRing(lon,lat,polygon[0])&&!polygon.slice(1).some(r=>inRing(lon,lat,r))}
-function getLocation(value){if(locationCache.has(value))return locationCache.get(value);try{const [lat,lon]=value.split(',').map(Number);const zone=tzlookup(lat,lon);const country=countryShapes.find(c=>c.polygons.some(p=>inPolygon(lon,lat,p)));const code=country?.code||zoneCountries[zone];const info={zone,country:code?countryNames.of(code):'현지',formatter:new Intl.DateTimeFormat('ko-KR',{timeZone:zone,hour:'numeric',minute:'2-digit',hour12:true})};locationCache.set(value,info);return info}catch{return null}}
+function getLocation(value){if(locationCache.has(value))return locationCache.get(value);try{const [lat,lon]=value.split(',').map(Number);const zone=tzlookup(lat,lon);const country=countryShapes.find(c=>c.polygons.some(p=>inPolygon(lon,lat,p)));const separateRegions={'Asia/Hong_Kong':'HK','Asia/Macau':'MO','Asia/Macao':'MO','Asia/Taipei':'TW'};const code=separateRegions[zone]||country?.code||zoneCountries[zone];const info={zone,country:({'HK':'홍콩','MO':'마카오','TW':'대만','CN':'중국'})[code]||(code?countryNames.of(code):'현지'),formatter:new Intl.DateTimeFormat('ko-KR',{timeZone:zone,hour:'numeric',minute:'2-digit',hour12:true})};locationCache.set(value,info);return info}catch{return null}}
 function localTimeElement(value){const e=node('p','localTime');e.dataset.coords=value;return e}
 
 const dayFormatters=new Map();
