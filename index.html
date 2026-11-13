@@ -180,7 +180,33 @@ function applyPostcardThumbnail(img,source,path){const cached=postcardThumbCache
 
 
 function countryFor(c){return getLocation(c.coords)?.country||'현지'}
-function countryOptions(cards){return [...new Set(cards.map(countryFor))].sort((a,b)=>a.localeCompare(b,'ko'))}
+const offsetFormatters = new Map();
+function utcOffsetMinutes(zone, now) {
+  if (!offsetFormatters.has(zone)) {
+    offsetFormatters.set(zone, new Intl.DateTimeFormat('en-US', {timeZone: zone, timeZoneName: 'longOffset'}));
+  }
+  const offset = offsetFormatters.get(zone).formatToParts(now).find(part => part.type === 'timeZoneName')?.value;
+  if (offset === 'GMT') return 0;
+  const match = /^GMT([+-])(\d{2}):(\d{2})$/.exec(offset);
+  return match ? (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) : NaN;
+}
+
+function countryOptions(cards, now = new Date()) {
+  const koreaOffset = utcOffsetMinutes('Asia/Seoul', now);
+  const distances = new Map();
+  const zoneDistances = new Map();
+  for (const card of cards) {
+    const location = getLocation(card.coords);
+    const country = location?.country || '현지';
+    const zone = location?.zone;
+    if (zone && !zoneDistances.has(zone)) {
+      const difference = Math.abs(utcOffsetMinutes(zone, now) - koreaOffset);
+      zoneDistances.set(zone, Number.isFinite(difference) ? difference : Infinity);
+    }
+    distances.set(country, Math.min(distances.get(country) ?? Infinity, zoneDistances.get(zone) ?? Infinity));
+  }
+  return [...distances.keys()].sort((a, b) => distances.get(a) - distances.get(b) || a.localeCompare(b, 'ko'));
+}
 function renderCountryFilters(cards){const container=$('countryFilters'),options=countryOptions(cards);if(activeCountry&&!options.includes(activeCountry))activeCountry='';const signature=JSON.stringify([options,activeCountry]);if(container.dataset.signature===signature)return;const scroll=container.scrollLeft;container.dataset.signature=signature;container.replaceChildren();for(const country of ['',...options]){const b=button(country||'전체',()=>{activeCountry=country;render()},country===activeCountry?'active':'');b.setAttribute('aria-pressed',String(country===activeCountry));container.append(b)}container.scrollLeft=scroll}
 
 function render(){for(const key of ['flower','mushroom','expedition']){$(key).setAttribute('aria-selected',String(activeCategory===key));$(key).classList.toggle('active',activeCategory===key)}const categoryItems=items.filter(c=>(c.category||'mushroom')===activeCategory);renderCountryFilters(categoryItems);let list=categoryItems.filter(c=>(!onlyFav||c.favorite)&&(!activeCountry||countryFor(c)===activeCountry));list.sort($('sort').value==='name'?(a,b)=>a.coords.localeCompare(b.coords,'ko'):$('sort').value==='old'?(a,b)=>a.created-b.created:(a,b)=>b.created-a.created);$('count').textContent=categoryItems.length;$('fav').textContent='♡ 즐겨찾기 '+categoryItems.filter(c=>c.favorite).length;$('all').classList.toggle('active',!onlyFav);$('fav').classList.toggle('active',onlyFav);if(lazyPhotos)lazyPhotos.disconnect();$('grid').replaceChildren();$('empty').hidden=list.length>0;if(!list.length){$('empty').querySelector('h3').textContent=activeCountry?'이 국가에 등록된 엽서가 없습니다.':'등록된 엽서가 없습니다.';$('empty').querySelector('p').textContent=''}
